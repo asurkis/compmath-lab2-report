@@ -1,0 +1,235 @@
+%! Author = asurk
+%! Date = 23.02.2020
+
+% Preamble
+\documentclass[10pt,a4paper]{article}
+
+% Packages
+\usepackage{amsmath}
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{fullpage}
+\usepackage{geometry}
+\geometry{a4paper,top=20mm,bottom=20mm,left=10mm,right=10mm}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows}
+\usetikzlibrary{calc}
+
+% Document
+\begin{document}
+    \input{titlepage.tex}
+
+    \textbf{Цель работы:}
+    научиться использовать базовые методы численного интегрирования
+
+    \textbf{Порядок выполнения:}
+
+    Запрашиваем у пользователя функцию, интеграл которой нужно вычислить,
+    метод вычисления, пределы и точность интегрирования.
+    Вычисляем интеграл выбранным методом, начальное количество отрезков разбиения интервала $n=4$ ($5$ точек),
+    на каждом шаге увеличиваем количество разбиений в $2$ раза,
+    пока модуль разности двух последовательных вычислений не станет меньше заданной точности.
+
+    \begin{center}
+        \newpage
+        \textbf{Блок-схема программы}
+
+        \tikzstyle{startstop}=[rectangle,rounded corners,minimum width=3cm,minimum height=1cm,text centered,draw=black]
+        \tikzstyle{io}=[trapezium,trapezium left angle=75,trapezium right angle=105,minimum width=3cm,minimum height=1cm,text centered,draw=black]
+        \tikzstyle{process}=[rectangle,minimum width=3cm,minimum height=1cm,text centered,draw=black]
+        \tikzstyle{decision}=[diamond,aspect=3,minimum width=3cm,minimum height=1cm,text centered,draw=black]
+        \tikzstyle{arrow}=[->,>=stealth]
+
+        \begin{tikzpicture}[node distance=1.5cm]
+            \node (start) [startstop] {Начало};
+            \node (input) [io,below of=start] {Выбор функции $f$, метода, ввод $l$, $r$, $p$};
+            \draw[arrow] (start) -- (input);
+            \node (init_n) [process,below of=input] {$n=4,R'=\infty$};
+            \draw[arrow] (input) -- (init_n);
+            \node (init_x) [process,below of=init_n] {$x_k=l+\frac{k}{n}(r-l):k=\overline{0,n}$};
+            \draw[arrow] (init_n) -- (init_x);
+            \node (choose_method) [decision,below of=init_x,yshift=-0.5cm] {Какой метод вычисления?};
+            \draw[arrow] (init_x) -- (choose_method);
+            \node (method_rectangle) [below of=choose_method,xshift=-6cm] {Прямоугольников};
+            \draw[arrow] (choose_method) -| (method_rectangle);
+            \node (method_rectangle_left) [below of=method_rectangle,xshift=-2.5cm] {Левых};
+            \draw[arrow] (method_rectangle) -| (method_rectangle_left);
+            \node (method_rectangle_middle) [below of=method_rectangle] {Средних};
+            \draw[arrow] (method_rectangle) -- (method_rectangle_middle);
+            \node (method_rectangle_right) [below of=method_rectangle,xshift=2.5cm] {Правых};
+            \draw[arrow] (method_rectangle) -| (method_rectangle_right);
+            \node (method_trapeze) [below of=choose_method] {Трапеций};
+            \draw[arrow] (choose_method) -- (method_trapeze);
+            \node (method_simpson) [below of=choose_method,xshift=6cm] {Симпсона};
+            \draw[arrow] (choose_method) -| (method_simpson);
+
+            \node (rectangle_left_y) [process,below of=method_rectangle_left] {$y_k=f(x_{k-1}):k=\overline{1,n}$};
+            \draw[arrow] (method_rectangle_left) -- (rectangle_left_y);
+            \node (rectangle_middle_y) [process,below of=method_rectangle_middle,yshift=-1.5cm] {$y_k=f\left(\frac{x_{k-1}+x_k}{2}\right):k=\overline{1,n}$};
+            \draw[arrow] (method_rectangle_middle) -- (rectangle_middle_y);
+            \node (rectangle_right_y) [process,below of=method_rectangle_right,yshift=-3cm] {$y_k=f(x_k):k=\overline{1,n}$};
+            \draw[arrow] (method_rectangle_right) -- (rectangle_right_y);
+            \node (rectangle_result) [process,below of=rectangle_middle_y,yshift=-1.5cm] {$R=\sum_{k=1}^n y_k(x_k-x_{k-1})$};
+            \draw[arrow] (rectangle_left_y) |- (rectangle_result);
+            \draw[arrow] (rectangle_middle_y) -- (rectangle_result);
+            \draw[arrow] (rectangle_right_y) |- (rectangle_result);
+
+            \node (trapeze_y) [process,below of=method_trapeze] {$y_k=f(x_k):k=\overline{0,n}$};
+            \draw[arrow] (method_trapeze) -- (trapeze_y);
+            \node (trapeze_result) [process, below of=trapeze_y]
+            {$R=\frac{1}{2}\sum_{k=1}^n (y_k+y_{k-1})(x_k-x_{k-1})$};
+            \draw[arrow] (trapeze_y) -- (trapeze_result);
+
+            \node (simpson_y) [process,below of=method_simpson] {$y_k=f(x_k):k=\overline{0,n}$};
+            \draw[arrow] (method_simpson) -- (simpson_y);
+            \node (simpson_a) [process,below of=simpson_y,text width=5cm,yshift=-0.25cm] {$a_k$
+                $=y_{2k-2}(x_{2k-1}-x_{2k})$
+                $-y_{2k-1}(x_{2k-2}-x_{2k})$
+                $+y_{2k}(x_{2k-2}-x_{2k-1})$
+                $:k=\overline{1,\frac{n}{2}}$};
+            \draw[arrow] (simpson_y) -- (simpson_a);
+            \node (simpson_b) [process,below of=simpson_a,text width=5cm,yshift=-0.5cm] {$b_k$
+                $=y_{2k-2}(x_{2k-1}^2-x_{2k}^2)$
+                $-y_{2k-1}(x_{2k-2}^2-x_{2k}^2)$
+                $+y_{2k}(x_{2k-2}^2-x_{2k-1}^2)$
+                $:k=\overline{1,\frac{n}{2}}$};
+            \draw[arrow] (simpson_a) -- (simpson_b);
+            \node (simpson_c) [process,below of=simpson_b,text width=5cm,yshift=-0.75cm] {$c_k$
+                $=y_{2k-2}x_{2k-1}x_{2k}(x_{2k-1}-x_{2k})$
+                $-y_{2k-1}x_{2k-2}x_{2k}(x_{2k-2}-x_{2k})$
+                $+y_{2k}x_{2k-2}x_{2k-1}(x_{2k-2}-x_{2k-1})$
+                $:k=\overline{1,\frac{n}{2}}$};
+            \draw[arrow] (simpson_b) -- (simpson_c);
+            \node (simpson_t) [process,below of=simpson_c,text width=5cm,yshift=-0.75cm]
+            {$t_k=2a(x_3^3-x_1^3)-3b(x_3^2-x_1^2)+6c(x_3-x_1):k=\overline{1,\frac{n}{2}}$};
+            \draw[arrow] (simpson_c) -- (simpson_t);
+            \node (simpson_result) [process,below of=simpson_t] {$R=\sum_{k=1}^{n/2} t_k$};
+            \draw[arrow] (simpson_t) -- (simpson_result);
+
+            \node (delta) [process,below of=trapeze_result,yshift=-4.5cm] {$\Delta R=|R-R'|$};
+            \draw[arrow] (delta.east) ++(0.75,0) |- (simpson_result) (delta.east) ++(0.75,0) -- (delta);
+            \draw[arrow] (rectangle_result) |- (delta);
+            \draw[arrow] (trapeze_result) -- (delta);
+            \node (exit_condition) [decision,below of=delta] {$\Delta R\leq p?$};
+            \draw[arrow] (delta) -- (exit_condition);
+            \node (old_result) at (exit_condition) [process,xshift=-4.5cm] {$R'=R$};
+            \draw[arrow] (exit_condition.west) node [anchor=south east] {Нет} -- (old_result);
+            \node (new_n) at (old_result) [process,xshift=-3.5cm] {$n=2n$};
+            \draw[arrow] (old_result) -- (new_n);
+
+            \draw[arrow] (new_n) -- ++(-2.5,0) |- (init_x);
+
+            \node (output) [io,below of=exit_condition,yshift=-1cm] {Вывод $R'$, $n$, $\Delta R$};
+            \draw[arrow] (exit_condition.south) node [anchor=north west] {Да} -- (output);
+            \node (stop) [startstop,below of=output] {Конец};
+            \draw[arrow] (output) -- (stop);
+        \end{tikzpicture}
+    \end{center}
+
+    \newpage
+    \lstset{
+        extendedchars,
+        numbers=left,
+        basicstyle=\ttfamily\small,
+        numberstyle=\ttfamily\small,
+        inputencoding=cp1251
+    }
+    \lstinputlisting[title=\textbf{Листинг программы}]{main.py}
+
+    \textbf{Пример}
+
+    \begin{gather*}
+        \int_1^2 \left(5x^3-2x^2+3x-15\right)dx=
+        \left.\left(\frac{5}{4}x^4-\frac{2}{3}x^3+\frac{3}{2}x^2-15x\right)\right|_1^2=\\
+        =\frac{5}{4}(2^4-1^4)-\frac{2}{3}(2^3-1^3)+\frac{3}{2}(2^2-1^2)-15(2-1)=
+        \frac{75}{4}-\frac{14}{3}+\frac{9}{2}-15=\\
+        =\frac{225-56+54-180}{12}=\frac{43}{12}=3.58(3)\\
+    \end{gather*}
+
+    Метод трапеций при $n=10$:
+
+    \begin{gather*}
+        \frac{2-1}{2\cdot 10} ((5\cdot 1^3-2\cdot 1^2+3\cdot 1-15)+(5\cdot 2^3-2\cdot 2^2+3\cdot 2-15)+\\
+            +2\sum_{k=1}^{9} \left(5\left(1+(2-1)\frac{k}{10}\right)^3
+            -2\left(1+(2-1)\frac{k}{10}\right)^2
+            +3\left(1+(2-1)\frac{k}{10}\right)
+            -15\right))=
+    \end{gather*}
+    \begin{gather*}
+        =\frac{1}{20}(\left(5\cdot 1^3-2\cdot 1+3\cdot 1-15\right)+\\
+        +2\left(5\cdot 1.1^3-2\cdot 1.1^2+3\cdot 1.1-15\right)+2\left(5\cdot 1.2^3-2\cdot 1.2^2+3\cdot 1.2-15\right)+\\
+        +2\left(5\cdot 1.3^3-2\cdot 1.3^2+3\cdot 1.3-15\right)+2\left(5\cdot 1.4^3-2\cdot 1.4^2+3\cdot 1.4-15\right)+\\
+        +2\left(5\cdot 1.5^3-2\cdot 1.5^2+3\cdot 1.5-15\right)+2\left(5\cdot 1.6^3-2\cdot 1.6^2+3\cdot 1.6-15\right)+\\
+        +2\left(5\cdot 1.7^3-2\cdot 1.7^2+3\cdot 1.7-15\right)+2\left(5\cdot 1.8^3-2\cdot 1.8^2+3\cdot 1.8-15\right)+\\
+        +2\left(5\cdot 1.9^3-2\cdot 1.9^2+3\cdot 1.9-15\right)+\left(5\cdot 2^3-2\cdot 2+3\cdot 2-15\right))=
+    \end{gather*}
+    \begin{gather*}
+        =0.05(\left(5\cdot 1-2\cdot 1+3\cdot 1-15\right)+\\
+        +2\left(5\cdot 1.331-2\cdot 1.21+3\cdot 1.1-15\right)+2\left(5\cdot 1.728-2\cdot 1.44+3\cdot 1.2-15\right)+\\
+        +2\left(5\cdot 2.197-2\cdot 1.69+3\cdot 1.3-15\right)+2\left(5\cdot 2.744-2\cdot 1.96+3\cdot 1.4-15\right)+\\
+        +2\left(5\cdot 3.375-2\cdot 2.25+3\cdot 1.5-15\right)+2\left(5\cdot 4.096-2\cdot 2.56+3\cdot 1.6-15\right)+\\
+        +2\left(5\cdot 4.913-2\cdot 2.89+3\cdot 1.7-15\right)+2\left(5\cdot 5.832-2\cdot 3.24+3\cdot 1.8-15\right)+\\
+        +2\left(5\cdot 6.859-2\cdot 3.61+3\cdot 1.9-15\right)+\left(5\cdot 8-2\cdot 4+3\cdot 2-15\right))=
+    \end{gather*}
+    \begin{gather*}
+        =0.05(\left(5-2+3-15\right)+\\
+        +2\left(6.655-2.42+3.3-15\right)+2\left(8.64-2.88+3.6-15\right)+\\
+        +2\left(10.985-3.38+3.9-15\right)+2\left(13.72-3.92+4.2-15\right)+\\
+        +2\left(16.875-4.5+4.5-15\right)+2\left(20.48-5.12+4.8-15\right)+\\
+        +2\left(24.565-5.78+5.1-15\right)+2\left(29.16-6.48+5.4-15\right)+\\
+        +2\left(34.295-7.22+5.7-15\right)+\left(40-8+6-15\right))=
+    \end{gather*}
+    \begin{gather*}
+        =0.05(
+        (-9)+2\cdot (-7.465)+2\cdot (-5.64)+\\
+        +2\cdot (-3.495)+2\cdot (-1)+2\cdot 1.875+2\cdot 5.16+\\
+        +2\cdot 8.885+2\cdot 13.08+2\cdot 17.775+23)=
+    \end{gather*}
+    \begin{gather*}
+        =0.05((-9.0)+(-14.93)+(-11.28)+(-6.99)+(-2)+3.75+10.32+17.77+26.16+35.55+23)=
+    \end{gather*}
+    \begin{gather*}
+        =0.05\cdot 72.35=3.6175
+    \end{gather*}
+
+    Абсолютная погрешность:
+    \[ |3.6175-3.58(3)|=0.0341(6)=\frac{41}{1200} \]
+
+    Результат выполнения программы:
+    \begin{verbatim}
+Выберите функцию для вычисления интеграла:
+1) 5x^3 - 2x^2 + 3x - 15
+2) x^3 - 3x^2 + 6x - 19
+3) 2x^3 - 2x^2 + 7x - 14
+4) 3x^3 + 5x^2 + 3x - 6
+5) -x^3 - x^2 + x + 3
+6) x
+7) 1
+Выбрана функция (1): 5x^3 - 2x^2 + 3x - 15
+Выберите метод вычисления интеграла:
+1) Метод левых прямоугольников
+2) Метод правых прямоугольников
+3) Метод средних прямоугольников
+4) Метод трапеций
+5) Метод Симпсона
+Выбран метод (5): Метод Симпсона
+Выберите левую границу интервала:
+Выбрана левая граница интервала: 1.0
+Выберите правую границу интервала:
+Выбрана правая граница интервала: 2.0
+Выберите точность:
+Выбрана точность 0.001
+Вычисляю...
+Готово
+Значение интеграла: 3.5833333333333335
+Количество итераций: 8
+Погрешность: 4.440892098500626e-16
+    \end{verbatim}
+
+    \textbf{Вывод:}
+    существуют разные численные методы интегрирования,
+    рассмотренные в этой лабораторной сводятся к приближению функции с помощью многочлена
+    (метод прямоугольников -- 0 степени, трапеций -- 1 степени, Симпсона -- 2 степени),
+    вычислению интеграла многочлена на каждом отрезке и суммированию результатов.
+\end{document}
